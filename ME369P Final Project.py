@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import ttk
+import pytesseract
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
@@ -43,42 +44,64 @@ def find_insert_position(pile, student_name):
             return i, name
     return len(pile), None
 
-def read_ar_tag(image):
-    """Process the AR tag in the image to extract the student's name."""
-    # Dummy function: replace with actual AR tag decoding logic
-    # Assuming the AR tag contains a string of the format "First Last"
-    # Return a decoded name, e.g., "Jack Craig"
-    decoded_name = "John Doe"  # Placeholder
-    return decoded_name
+def extract_name_from_exam(image):
+    """
+    Extract the name from the exam paper using OCR.
+    Assumes the name is located in a fixed region on the exam paper.
+    """
+    # Preprocess the image (convert to grayscale)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Define the region of interest (ROI) where the name is expected
+    # Adjust these coordinates to match where the name appears on the paper
+    height, width = gray.shape
+    roi = gray[int(height * 0.1):int(height * 0.2), int(width * 0.2):int(width * 0.8)]
+
+    # Perform OCR on the ROI
+    custom_config = r'--oem 3 --psm 6'  # OCR Engine and page segmentation mode
+    extracted_text = pytesseract.image_to_string(roi, config=custom_config)
+
+    # Clean up the extracted text to return the name
+    # Assuming names follow "First Last" format
+    name = extracted_text.strip().split("\n")[0]  # Take the first line as the name
+    return name
 
 def process_student_paper(image, piles):
     """Process a single student's paper, determine its pile, and provide sorting instruction."""
-    student_name = read_ar_tag(image)
-    last_name = student_name.split(" ")[1]
-    pile_name = determine_pile(last_name)
-    
-    if pile_name is None:
-        text_to_speech("Error: Unable to determine pile for the student.")
-        return
+    try:
+        student_name = extract_name_from_exam(image)
+        if not student_name or len(student_name.split()) < 2:
+            text_to_speech("Error: Unable to extract a valid name from the paper.")
+            return
 
-    # Sort the relevant pile
-    pile = piles[pile_name]
-    pile = sort_pile(pile)
+        last_name = student_name.split(" ")[1]
+        pile_name = determine_pile(last_name)
 
-    # Determine insert position
-    position, next_name = find_insert_position(pile, student_name)
+        if pile_name is None:
+            text_to_speech("Error: Unable to determine pile for the student.")
+            return
 
-    # Update the pile
-    pile.insert(position, student_name)
-    piles[pile_name] = pile
+        # Sort the relevant pile
+        pile = piles[pile_name]
+        pile = sort_pile(pile)
 
-    # Voice command for sorting
-    if next_name:
-        message = f"Place {student_name}'s paper in the {pile_name} pile, after {next_name}."
-    else:
-        message = f"Place {student_name}'s paper as the first in the {pile_name} pile."
+        # Determine insert position
+        position, next_name = find_insert_position(pile, student_name)
 
-    text_to_speech(message)
+        # Update the pile
+        pile.insert(position, student_name)
+        piles[pile_name] = pile
+
+        # Voice command for sorting
+        if next_name:
+            message = f"Place {student_name}'s paper in the {pile_name} pile, after {next_name}."
+        else:
+            message = f"Place {student_name}'s paper as the first in the {pile_name} pile."
+
+        text_to_speech(message)
+
+    except Exception as e:
+        text_to_speech(f"Error processing the paper: {e}")
 
 # GUI for file selection and camera input
 def select_file(piles):
