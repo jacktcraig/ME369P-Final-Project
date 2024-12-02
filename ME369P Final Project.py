@@ -1,12 +1,11 @@
 import cv2
 import pyttsx3
-import numpy as np
 from collections import defaultdict
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
-from tkinter import ttk
 import pytesseract
+import numpy as np
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
@@ -44,32 +43,59 @@ def find_insert_position(pile, student_name):
             return i, name
     return len(pile), None
 
-def extract_name_from_exam(image):
-    """
-    Extract the name from the exam paper using OCR.
-    Assumes the name is located in a fixed region on the exam paper.
-    """
-    # Preprocess the image (convert to grayscale)
+
+def extract_name(image):
+    """Extract the student's name from the exam paper image with improved pre-processing."""
+    import re
+    
+    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Apply adaptive thresholding
+    adaptive_thresh = cv2.adaptiveThreshold(
+        gray, 
+        255, 
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY_INV, 
+        11, 
+        2
+    )
+    
+    # Remove noise through morphological operations
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
+    cleaned = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_CLOSE, kernel)
+    
+    # Apply sharpening filter
+    sharpen_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    sharpened = cv2.filter2D(cleaned, -1, sharpen_kernel)
+    
+    # Save the processed image for debugging
+    cv2.imwrite("processed_image.png", sharpened)
+    
+    # Perform OCR on the processed image
+    text = pytesseract.image_to_string(sharpened, lang="eng", config="--psm 6")
+    
+    # Debug: Print the OCR output
+    print("OCR Output:\n", text)
 
-    # Define the region of interest (ROI) where the name is expected
-    # Adjust these coordinates to match where the name appears on the paper
-    height, width = gray.shape
-    roi = gray[int(height * 0.1):int(height * 0.2), int(width * 0.2):int(width * 0.8)]
+    # Extract the name using regex
+    for line in text.split("\n"):
+        if "Name" in line or "name" in line:  # Handle case insensitivity
+            line = line.replace("name", "Name").strip()
+            match = re.search(r"Name\s*[:\-]*\s*(.+)", line, re.IGNORECASE)
+            if match:
+                name_part = match.group(1).strip()
+                name_words = name_part.split()[:2]
+                return " ".join(name_words)
 
-    # Perform OCR on the ROI
-    custom_config = r'--oem 3 --psm 6'  # OCR Engine and page segmentation mode
-    extracted_text = pytesseract.image_to_string(roi, config=custom_config)
+    return "Unknown Name"
 
-    # Clean up the extracted text to return the name
-    # Assuming names follow "First Last" format
-    name = extracted_text.strip().split("\n")[0]  # Take the first line as the name
-    return name
+
 
 def process_student_paper(image, piles):
     """Process a single student's paper, determine its pile, and provide sorting instruction."""
     try:
-        student_name = extract_name_from_exam(image)
+        student_name = extract_name(image)
         if not student_name or len(student_name.split()) < 2:
             text_to_speech("Error: Unable to extract a valid name from the paper.")
             return
@@ -133,6 +159,10 @@ def use_camera(piles):
         if not ret:
             messagebox.showerror("Error", "Failed to capture image from the camera.")
             break
+        
+        # Flip the image horizontally and/or rotate if needed
+        #frame = cv2.flip(frame, 1)
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
 
         cv2.imshow("Capture Exam Paper", frame)
 
