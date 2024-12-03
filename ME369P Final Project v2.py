@@ -5,7 +5,6 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
 import pytesseract
-import numpy as np
 import re
 
 # Initialize text-to-speech engine
@@ -16,7 +15,7 @@ def text_to_speech(message):
     engine.say(message)
     engine.runAndWait()
 
-# Define pile ranges
+#pile ranges
 PILES = {
     "A-E": ("A", "E"),
     "F-J": ("F", "J"),
@@ -26,7 +25,6 @@ PILES = {
 }
 
 def determine_pile(last_name):
-    """Determine which pile a student belongs to based on their last name."""
     first_letter = last_name[0].upper()
     for pile, (start, end) in PILES.items():
         if start <= first_letter <= end:
@@ -34,11 +32,11 @@ def determine_pile(last_name):
     return None
 
 def sort_pile(pile):
-    """Sort the pile alphabetically by last name, then by first name."""
+    #sorts by last name then first name, alphabetically
     return sorted(pile, key=lambda name: (name.split(" ")[1].upper(), name.split(" ")[0].upper()))
 
 def find_insert_position(pile, student_name):
-    """Find the alphabetical position of the student in the pile."""
+    #this function determines where the paper will be inserted with existing papers
     student_last_name = student_name.split(" ")[1].upper()
     student_first_name = student_name.split(" ")[0].upper()
 
@@ -53,28 +51,31 @@ def find_insert_position(pile, student_name):
 
     return len(pile), None
 
-def preprocess_image(image):
-    """Preprocess the image to improve OCR results."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    adaptive_thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
-    )
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
-    cleaned = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_CLOSE, kernel)
-    sharpen_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-    return cv2.filter2D(cleaned, -1, sharpen_kernel)
+# def preprocess_image(image):
+#     """Preprocess the image to improve OCR results."""
+#     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#     adaptive_thresh = cv2.adaptiveThreshold(
+#         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+#     )
+#     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
+#     cleaned = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_CLOSE, kernel)
+#     sharpen_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+#     final_image = cv2.filter2D(cleaned, -1, sharpen_kernel)
+
+#     # Save processed image for debugging
+#     cv2.imwrite("processed_image.jpg", final_image)
+#     print("Processed image saved as 'processed_image.jpg'")
+#     return final_image
 
 def extract_name(image, preprocess=False):
-    """Extract the student's name from the exam paper image."""
-    if preprocess:
-        image = preprocess_image(image)
+    # if preprocess:
+    #     image = preprocess_image(image)
 
     text = pytesseract.image_to_string(image, lang="eng", config="--psm 6")
-    print("OCR Output:\n", text)  # Debugging
+    print("OCR Output:\n", text) #can be hwlpful for debugging
 
     for line in text.split("\n"):
-        if "Name" in line or "name" in line:  # Handle case insensitivity
-            # Normalize line
+        if "Name" in line or "name" in line:
             line = line.replace("name", "Name").strip()
             # Regex to capture names, allowing for extra characters like [ or (
             match = re.search(r"Name\s*[:\-]*\s*[\[\(]*\s*([A-Za-z]+\s[A-Za-z]+)", line)
@@ -88,8 +89,8 @@ def process_student_paper(image, piles, preprocess=False):
     """Process a single student's paper, determine its pile, and provide sorting instruction."""
     try:
         # Preprocess the image if required
-        if preprocess:
-            image = preprocess_image(image)
+        # if preprocess:
+        #     image = preprocess_image(image)
 
         student_name = extract_name(image)
         if not student_name or len(student_name.split()) < 2:
@@ -126,7 +127,6 @@ def process_student_paper(image, piles, preprocess=False):
 
 
 def select_file(piles):
-    """Allow the user to select an image file and process it."""
     file_path = filedialog.askopenfilename(
         title="Select an image of the exam paper", filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")]
     )
@@ -142,10 +142,9 @@ def select_file(piles):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to process the paper: {e}")
 
-def use_camera(piles):
-    """Capture an image using the computer's camera and process it."""
-    camera = cv2.VideoCapture(0)
 
+def use_camera(piles):
+    camera = cv2.VideoCapture(0)
     if not camera.isOpened():
         messagebox.showerror("Error", "Failed to access the camera.")
         return
@@ -154,32 +153,6 @@ def use_camera(piles):
 
     while True:
         ret, frame = camera.read()
-
-        if not ret:
-            messagebox.showerror("Error", "Failed to capture image from the camera.")
-            break
-
-        # Show the captured frame
-        cv2.imshow("Capture Exam Paper", frame)
-
-        # Wait for user input
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('s'):  # Save and process the captured frame
-            process_student_paper(frame, piles, preprocess=True)
-            messagebox.showinfo("Success", "The paper has been processed successfully.")
-            break
-        elif key == ord('q'):  # Exit without processing
-            break
-
-    # Release resources
-    camera.release()
-    cv2.destroyAllWindows()
-
-
-    messagebox.showinfo("Instructions", "Press 's' to capture the image, or 'q' to quit.")
-
-    while True:
-        ret, frame = camera.read()
         if not ret:
             messagebox.showerror("Error", "Failed to capture image from the camera.")
             break
@@ -187,20 +160,17 @@ def use_camera(piles):
         cv2.imshow("Capture Exam Paper", frame)
 
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('s'):  # Save image when 's' is pressed
+        if key == ord('s'):
             process_student_paper(frame, piles, preprocess=True)
             messagebox.showinfo("Success", "The paper has been processed successfully.")
             break
-        elif key == ord('q'):  # Quit when 'q' is pressed
+        elif key == ord('q'):
             break
 
     camera.release()
     cv2.destroyAllWindows()
-
-
 
 def view_virtual_piles(piles):
-    """Display a virtual representation of the sorted piles."""
     window = tk.Toplevel()
     window.title("Virtual Representation of Piles")
 
